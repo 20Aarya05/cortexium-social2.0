@@ -1,6 +1,10 @@
 # 🧠 Cortexium — Social Intelligence Agent
 
+![Cortexium Banner](assets/images/banner.png)
+
 A full-stack AI agent that performs **real-time face recognition, social interaction logging, HUD rendering, multimodal behavior understanding**, and builds a **behavioral knowledge graph to train robots** — all running 100% locally.
+
+![Cortexium HUD Mockup](assets/images/hud_mockup.png)
 
 ---
 
