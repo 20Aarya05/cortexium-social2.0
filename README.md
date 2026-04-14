@@ -9,11 +9,11 @@ A full-stack AI agent that performs **real-time face recognition, social interac
 ## 🖼️ System Showcase
 
 ### 👁️ Live Vision & HUD
-The core agent detects and identifies individuals in real-time, overlaying a high-tech HUD with social metadata.
+The core agent detects and identifies individuals in real-time.
 
-| Detection View 1 | Detection View 2 |
-|---|---|
-| ![Live Detection](assets/images/face_detection_1.png) | ![HUD Overlay](assets/images/face_detection_2.png) |
+| Detection View 1 | Detection View 2 | Conceptual HUD |
+|---|---|---|
+| ![Live Detection](assets/images/face_detection_1.png) | ![HUD Overlay](assets/images/face_detection_2.png) | ![HUD Mockup](assets/images/hud_mockup.png) |
 
 ### 📊 Social Dashboard
 Manage your social ecosystem, view person profiles, and track interaction history.
