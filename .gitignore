@@ -1,36 +1,17 @@
-# Environments
-.venv/
-venv/
-ENV/
-env/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+venv/
+.env
 
 # Node
 node_modules/
 dist/
-dist-ssr/
-*.local
-
-# Logs
-logs/
-*.log
-
-# Whisper Models
-backend/models/
-
-# OS Files
 .DS_Store
-Thumbs.db
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Temporary Audio
-backend/tmp*
-frontend/tmp*
+# Project specific
+data/chroma/
+data/logs/
+data/faces/
+exports/robot_training/

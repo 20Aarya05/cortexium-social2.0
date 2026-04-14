@@ -1,76 +1,184 @@
-# Cortexium Whisper - Real-time English Transcription
+# 🧠 Cortexium — Social Intelligence Agent
 
-A premium AI-powered live transcription application that converts English speech into text with near-zero latency. Built with a futuristic glassmorphic UI and a robust Python backend using the Faster-Whisper engine.
-
-## 🚀 Features
-- **Real-time Transcription**: Capture audio directly from the browser and see text appears instantly.
-- **English-Only Focus**: Optimized for high-accuracy English speech recognition.
-- **Dynamic Visualizer**: Interactive "Ralph Loop" visualizer that reacts to your voice volume.
-- **Hard-Stop Handshake**: Immediate session cleanup to prevent "ghost" recording or background processing.
-- **Minimalist UI**: Sleek, dark-mode design with premium aesthetics.
-
-## 🛠️ Tech Stack
-- **Frontend**: React, Vite, CSS (Vanilla), Web Audio API.
-- **Backend**: FastAPI (Python), Faster-Whisper (Whisper Base model).
-- **Communication**: WebSockets for low-latency streaming.
-
-## 🏗️ Architecture
-1. **Audio Capture**: Browser's MediaRecorder/Web Audio API captures raw PCM data.
-2. **Streaming**: 2-second audio chunks are sent as binary blobs over a WebSocket.
-3. **Transcription**: The backend saves chunks to a temporary buffer and passes them to the `WhisperAgent`.
-4. **Feedback**: Transcribed text and English confidence scores are sent back to the frontend.
-5. **Display**: React updates the UI and scrolls to the latest transcription.
-
-## 📋 Installation
-
-### Prerequisites
-- Node.js (v18+)
-- Python (3.9+)
-- FFmpeg (Required by Whisper for audio processing)
-
-### Backend Setup
-1. Navigate to the backend folder:
-   ```bash
-   cd backend
-   ```
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   ```
-3. Activate the virtual environment:
-   - Windows: `.\venv\Scripts\activate`
-   - Mac/Linux: `source venv/bin/activate`
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Frontend Setup
-1. Navigate to the frontend folder:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-## 🏃 Running the App
-
-1. **Start Backend**:
-   ```bash
-   cd backend
-   .\venv\Scripts\python main.py
-   ```
-2. **Start Frontend**:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-3. Open `http://localhost:5173` in your browser.
-
-## 🤖 Agents
-- **WhisperAgent**: A specialized wrapper around `faster-whisper`. It handles model loading, VAD (Voice Activity Detection), and transcription with specific confidence thresholds to ignore silence.
+A full-stack AI agent that performs **real-time face recognition, social interaction logging, HUD rendering, multimodal behavior understanding**, and builds a **behavioral knowledge graph to train robots** — all running 100% locally.
 
 ---
-Built by [20Aarya05](https://github.com/20Aarya05)
+
+## 🗂 Project Structure
+
+```
+cortexium-social/
+├── main.py                        # 🚀 Main orchestration loop
+├── config.py                      # ⚙️  Central config (loaded from .env)
+├── requirements.txt
+├── .env.example                   # Copy to .env and fill in
+│
+├── core/
+│   ├── vision/
+│   │   ├── face_pipeline.py       # InsightFace detection + ArcFace recognition
+│   │   ├── body_pose.py           # MediaPipe Holistic (gestures, proximity)
+│   │   └── emotion_detector.py    # DeepFace per-face emotion
+│   ├── audio/
+│   │   ├── speech_engine.py       # Whisper STT (mic streaming)
+│   │   └── diarization.py         # PyAnnote speaker diarization
+│   ├── fusion/
+│   │   └── interaction_analyzer.py# Multimodal fusion → InteractionEvent
+│   ├── enrollment/
+│   │   └── enrollment_flow.py     # Voice-first face enrollment
+│   ├── hud/
+│   │   └── hud_renderer.py        # OpenCV + PyGame HUD overlay
+│   ├── knowledge/
+│   │   └── behavior_extractor.py  # Robot knowledge → YAML/JSON-LD/CSV
+│   └── storage/
+│       ├── db.py                  # SQLite + ChromaDB setup
+│       ├── person_registry.py     # Enroll, identify, log interactions
+│       └── graph_db.py            # Neo4j social knowledge graph
+│
+├── api/
+│   └── main.py                    # FastAPI REST + WebSocket server
+│
+├── dashboard/                     # React + Vite web dashboard
+│   ├── src/
+│   │   ├── App.jsx                # Main dashboard app
+│   │   └── index.css
+│   ├── index.html
+│   └── package.json
+│
+├── scripts/
+│   ├── setup.py                   # One-time setup checker
+│   ├── test_recognition.py        # Face recognition validation
+│   └── test_knowledge_export.py   # Robot export validation
+│
+├── data/                          # Auto-created
+│   ├── faces/
+│   ├── logs/                      # SQLite DB
+│   └── knowledge/
+└── exports/robot_training/        # YAML + JSON-LD + CSV exports
+```
+
+---
+
+## ⚡ Quick Start
+
+### 1. Prerequisites
+
+```bash
+# Python 3.11+
+pip install -r requirements.txt
+```
+
+| Service | Link | Cost |
+|---|---|---|
+| Ollama (LLaMA 3.1 8B) | https://ollama.com/download | Free |
+| Neo4j Community | https://neo4j.com/download-center/#community | Free |
+| HuggingFace token | https://huggingface.co/settings/tokens | Free |
+
+### 2. Setup
+
+```bash
+# Check everything is ready
+python scripts/setup.py
+
+# Copy and edit .env
+cp .env.example .env
+# Edit .env: set HF_TOKEN, CAMERA_SOURCE, etc.
+
+# Pull LLaMA model
+ollama pull llama3.1:8b
+```
+
+### 3. Run
+
+**Terminal 1 — Main Vision Agent:**
+```bash
+# Webcam
+python main.py
+
+# Video file
+python main.py --source "path/to/video.mp4"
+
+# Vision only (no mic/audio)
+python main.py --no-audio
+```
+
+**Terminal 2 — API Server:**
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8765 --reload
+```
+
+**Terminal 3 — Web Dashboard:**
+```bash
+cd dashboard
+npm install
+npm run dev
+# Open: http://localhost:3000
+```
+
+---
+
+## 🎤 Voice Enrollment
+
+When a new face is detected, the HUD shows:
+```
+👤 New person detected — say: "This is [Name]"
+```
+
+Just say `"This is Alice"` or `"Meet Bob"` while looking at the camera.
+The system will:
+1. Transcribe via Whisper
+2. Extract the name
+3. Save face embedding to ChromaDB
+4. Create profile in SQLite
+5. Add node in Neo4j graph
+6. Confirm: `"✓ Enrolled: Alice"`
+
+---
+
+## 🤖 Robot Knowledge Export
+
+```bash
+# Via API
+curl http://localhost:8765/knowledge/export
+
+# Via script
+python scripts/test_knowledge_export.py
+```
+
+Exports to `exports/robot_training/`:
+- `behavior_patterns.yaml` — symbolic AI / rule-based robots
+- `knowledge_graph.jsonld` — semantic reasoning (RDF)
+- `interaction_dataset.csv` — ML training data
+
+---
+
+## 🔌 API Reference
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/enroll` | Enroll new face (name + embedding) |
+| GET | `/persons` | List all known people |
+| POST | `/identify` | Identify face by embedding |
+| GET | `/interactions` | Recent interaction events |
+| GET | `/knowledge/patterns` | Current behavior patterns |
+| GET | `/knowledge/export` | Trigger full robot export |
+| WS | `/stream` | Live event WebSocket stream |
+
+---
+
+## ⚠️ Privacy Notice
+
+This system processes **biometric data** (faces, voice). You are responsible for:
+- Obtaining consent from people being recorded
+- Complying with applicable laws (GDPR, CCPA, etc.)
+- Keeping all data local (no cloud by default)
+
+---
+
+## 🛠 Hardware Recommendations
+
+| Component | Minimum | Recommended |
+|---|---|---|
+| GPU | GTX 1060 6GB | RTX 3070+ |
+| RAM | 16GB | 32GB |
+| Camera | 1080p 30fps | 4K 60fps |
+| Mic | Any USB mic | Directional lapel mic |
