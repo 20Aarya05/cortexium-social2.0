@@ -4,7 +4,26 @@
 
 A full-stack AI agent that performs **real-time face recognition, social interaction logging, HUD rendering, multimodal behavior understanding**, and builds a **behavioral knowledge graph to train robots** — all running 100% locally.
 
-![Cortexium HUD Mockup](assets/images/hud_mockup.png)
+---
+
+## 🖼️ System Showcase
+
+### 👁️ Live Vision & HUD
+The core agent detects and identifies individuals in real-time, overlaying a high-tech HUD with social metadata.
+
+| Detection View 1 | Detection View 2 |
+|---|---|
+| ![Live Detection](assets/images/face_detection_1.png) | ![HUD Overlay](assets/images/face_detection_2.png) |
+
+### 📊 Social Dashboard
+Manage your social ecosystem, view person profiles, and track interaction history.
+
+![Dashboard — Known People](assets/images/dashboard_people.png)
+
+### 🤖 Behavioral Analytics
+Automated extraction of social events into structured data for robot training and behavioral profiling.
+
+![Behavioral Knowledge Graph](assets/images/behavioral_knowledge.png)
 
 ---
 
