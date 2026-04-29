@@ -7,12 +7,12 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8770',
+        target: 'http://localhost:45678',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/stream': {
-        target: 'ws://localhost:8770',
+        target: 'ws://localhost:45678',
         ws: true,
       },
     },

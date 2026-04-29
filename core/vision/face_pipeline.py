@@ -61,9 +61,8 @@ class FacePipeline:
                 name=cfg.FACE_RECOGNITION_MODEL,
                 providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
             )
-            # Multi-user tuning: increase det_size for better distance detection
-            # but keep it balanced to avoid lag. 480x480 is a good sweet spot.
-            self._app.prepare(ctx_id=0, det_size=(480, 480))
+            # Multi-user tuning: reduce det_size for faster processing to fix lag.
+            self._app.prepare(ctx_id=0, det_size=(320, 320))
             logger.info(f"[Face] InsightFace model '{cfg.FACE_RECOGNITION_MODEL}' loaded (Multi-user optimized)")
         except Exception as e:
             logger.error(f"[Face] Failed to load InsightFace: {e}")

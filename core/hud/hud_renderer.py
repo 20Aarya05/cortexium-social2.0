@@ -95,7 +95,6 @@ class HUDRenderer:
                 person = get_person(tf.person_id)
                 if person:
                     self._draw_subject_card(overlay, person, tf, w, h)
-                    self._draw_left_biometrics(overlay, tf.bbox, h)
 
         # 3. Transcript & Insights
         if transcript: self._ticker.appendleft(transcript)
@@ -206,82 +205,42 @@ class HUDRenderer:
         cv2.putText(img, "EMOTION:", (px, py), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
         cv2.putText(img, tf.emotion.upper(), (px, py+16), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 255, 200), 1)
 
-    def _draw_left_biometrics(self, img, bbox, h):
-        x1, y1, x2, y2 = bbox
-        lx, ly = 30, 200
-        
-        items = [
-            ("HEART RATE:", f"{70 + (y1%10)} BPM"),
-            ("ATTENTION:", "HIGH" if y1 < h/2 else "STABLE"),
-            ("ENVIRON:", "22.4'C"),
-            ("PULSE:", "NORMAL")
-        ]
-        
-        for i, (label, val) in enumerate(items):
-            cur_y = ly + i * 45
-            # Connecting Line
-            cv2.line(img, (lx + 80, cur_y + 5), (x1 - 10, y1 + 20 + i*10), C_CYAN, 1)
-            cv2.circle(img, (lx + 80, cur_y + 5), 2, C_CYAN, -1)
-            
-            cv2.putText(img, label, (lx, cur_y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
-            cv2.putText(img, val, (lx, cur_y + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, C_WHITE, 1)
 
     def _draw_status_bar(self, img, w, h):
-        # Bottom Center Glowing Box
-        bw, bh = 220, 40
-        bx, by = (w - bw) // 2, h - 60
-        
-        sub = img[by:by+bh, bx:bx+bw]
-        rect = np.zeros_like(sub)
-        cv2.rectangle(rect, (0, 0), (bw, bh), (20, 40, 20), -1)
-        img[by:by+bh, bx:bx+bw] = cv2.addWeighted(sub, 0.5, rect, 0.5, 0)
-        cv2.rectangle(img, (bx, by), (bx+bw, by+bh), (100, 255, 100), 1)
-        
-        cv2.putText(img, "BIOMETRICS: ACTIVE", (bx + 40, by + 26), 
+        # Simplified Bottom Status
+        bx, by = w // 2 - 80, h - 40
+        cv2.putText(img, "SYSTEM: ACTIVE", (bx, by), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 255, 100), 1)
 
     def _draw_branding(self, img, w, h):
         # Top Left
-        cv2.putText(img, "CORTEXIUM // SOCIAL INTELLIGENCE", (20, 30), 
+        cv2.putText(img, "CORTEXIUM // SOCIAL INTEL", (20, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, C_CYAN, 1)
-        # Top Right
-        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cv2.putText(img, ts, (w - 220, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.45, C_CYAN, 1)
 
     def _draw_ticker(self, img, w, h):
-        ty = h - 120
+        ty = h - 60
         for i, line in enumerate(list(self._ticker)):
-            alpha = 1.0 - (i * 0.2)
+            alpha = 1.0 - (i * 0.25)
             color = (int(255*alpha), int(255*alpha), int(255*alpha))
-            cv2.putText(img, f"> {line}", (20, ty - i*25), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
+            cv2.putText(img, f"> {line}", (20, ty - i*20), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
     def _draw_insight_card(self, img, text, w, h):
-        # Bottom Left Card
-        cw, ch = 400, 120
-        cx, cy = 20, h - 260
-        
-        sub = img[cy:cy+ch, cx:cx+cw]
-        rect = np.zeros_like(sub)
-        cv2.rectangle(rect, (0, 0), (cw, ch), (50, 40, 20), -1)
-        img[cy:cy+ch, cx:cx+cw] = cv2.addWeighted(sub, 0.5, rect, 0.5, 0)
-        cv2.rectangle(img, (cx, cy), (cx+cw, cy+ch), (255, 200, 50), 1)
-        
-        cv2.putText(img, "STRATEGIC INSIGHT", (cx + 10, cy + 20), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 200, 50), 1)
+        cx, cy = 20, h - 220
+        cv2.putText(img, "AI INSIGHT:", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 200, 50), 1)
         
         words = text.split()
         lines = []
         cur = ""
         for word in words:
-            if len(cur + word) < 50: cur += word + " "
+            if len(cur + word) < 40: cur += word + " "
             else:
                 lines.append(cur)
                 cur = word + " "
         lines.append(cur)
         
-        for i, line in enumerate(lines[:4]):
-            cv2.putText(img, line, (cx + 10, cy + 45 + i*18), 
+        for i, line in enumerate(lines[:3]):
+            cv2.putText(img, line, (cx, cy + 20 + i*16), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, C_WHITE, 1)
 
     def _draw_pygame(self, canvas_bgr: np.ndarray):

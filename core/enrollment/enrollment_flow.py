@@ -44,18 +44,27 @@ def _get_voiceprint_store():
 _PATTERNS = [
     r"(?:this is|meet|his name is|her name is|their name is|call (?:him|her|them))\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
     r"(?:introduce you to|introducing)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
-    r"^([A-Z][a-z]+)$",   # bare name fallback
+    # Bare names are risky (noise triggers them), so we only allow them if specifically structured
 ]
 
+_NAME_BLACKLIST = {
+    "You", "Me", "Him", "Her", "Them", "They", "Us", "Everyone", "Someone",
+    "Hello", "Hi", "Hey", "Yes", "No", "Thanks", "Thank", "Okay", "Oh", "And",
+    "But", "The", "This", "That", "It", "A", "An", "Please", "Sure",
+}
 
 def extract_name_from_text(text: str) -> Optional[str]:
     """Return extracted proper name or None."""
+    # 1. Try Regex Patterns
     for pattern in _PATTERNS:
         m = re.search(pattern, text, re.IGNORECASE)
         if m:
             name = m.group(1).strip().title()
-            if len(name) >= 2:
+            if len(name) >= 2 and name not in _NAME_BLACKLIST:
                 return name
+    
+    # 2. Heuristic for short, single-word transcripts (only if highly confident)
+    # But for now, we'll rely on the specific "This is [Name]" patterns to avoid noise-triggering.
     return None
 
 

@@ -113,7 +113,7 @@ class VisionWorker:
                 # Optional: emotion only if face is close
                 for f in faces:
                     if f.person_id:
-                        f.emotion = self.emo_detect.detect(frame, f.box)
+                        f.emotion = self.emo_detect.detect(frame, f.bbox)
                 
                 self.latest_result = (faces, pose)
                 self.input_queue.task_done()

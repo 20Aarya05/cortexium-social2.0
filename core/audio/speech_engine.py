@@ -83,14 +83,34 @@ class SpeechEngine:
         """Synchronously transcribe a float32 mono audio array at 16 kHz."""
         if self._model is None:
             return ""
+
+        # ── 1. Simple Energy-based VAD (Voice Activity Detection) ──
+        # Calculate RMS energy of the chunk
+        rms = np.sqrt(np.mean(audio_np**2))
+        # If the energy is below a threshold (silence/noise), skip Whisper
+        if rms < 0.005:  # threshold for background noise
+            return ""
+
         try:
-            # Whisper .transcribe handles the heavy lifting
+            # ── 2. Whisper Transcription with stricter thresholds ──
+            # fp16=False to avoid CUDA precision warnings on some hardware
+            # no_speech_threshold helps ignore background noise
             result = self._model.transcribe(
                 audio_np.astype(np.float32),
                 fp16=False,
                 language="en",
+                no_speech_threshold=0.6,
+                logprob_threshold=-1.0
             )
-            return result.get("text", "").strip()
+            text = result.get("text", "").strip()
+
+            # ── 3. Hallucination Blacklist ──
+            # Small Whisper models often hallucinate "You" or "Thank you" on noise
+            blacklist = ["you", "you.", "You", "Thank you.", "Thanks for watching.", "Please subscribe."]
+            if text in blacklist:
+                return ""
+
+            return text
         except Exception as e:
             logger.debug(f"[Speech] Transcription error: {e}")
             return ""
