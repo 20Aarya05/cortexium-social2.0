@@ -39,6 +39,7 @@ class TrackedFace:
     confidence:  float           = 0.0
     emotion:     str             = "neutral"
     embedding:   Optional[list]  = field(default=None, repr=False)
+    landmarks:   Optional[list]  = field(default=None, repr=False)
     last_updated: float          = field(default_factory=time.time)
 
 
@@ -105,6 +106,8 @@ class FacePipeline:
 
             tf.bbox = bbox
             tf.embedding = face.embedding.tolist()
+            if hasattr(face, "kps"):
+                tf.landmarks = face.kps.tolist()
             tf.last_updated = time.time()
 
             if should_identify and face.embedding is not None:

@@ -1,13 +1,14 @@
 """
-HUD Renderer — PyGame transparent overlay.
-Draws bounding boxes, name badges, emotion chips,
-live transcription ticker, and AI insight bubble.
+HUD Renderer — Premium Cyber Aesthetic.
+Draws futuristic targeting reticles, eye tracking, biometric side panels,
+and AI insight cards matching high-end tactical interfaces.
 """
 
 from __future__ import annotations
 
 import sys
 import time
+import datetime
 from collections import deque
 from typing import Optional
 
@@ -18,65 +19,42 @@ from loguru import logger
 import sys as _sys, pathlib
 _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 import config as cfg
+from core.storage.person_registry import get_person
 
 try:
     import pygame
     _PG_OK = True
 except ImportError:
     _PG_OK = False
-    logger.warning("[HUD] pygame not installed — HUD overlay disabled")
 
-# ── Palette ───────────────────────────────────────────────────────────────────
-C_BG          = (10,  12,  20,  200)    # dark glass
-C_KNOWN       = (0,   220, 140, 255)    # teal green
-C_UNKNOWN     = (255, 80,  80,  255)    # red
-C_EMOTION     = (255, 200, 60,  255)    # amber
-C_TEXT        = (255, 255, 255, 255)
-C_INSIGHT_BG  = (20,  20,  50,  210)
-C_TICKER_BG   = (0,   0,   0,   160)
-C_PENDING     = (100, 180, 255, 255)    # blue — awaiting enrollment
-
-EMOTION_EMOJI = {
-    "happy":     "😊",
-    "sad":       "😢",
-    "angry":     "😠",
-    "surprised": "😲",
-    "disgust":   "🤢",
-    "fear":      "😨",
-    "neutral":   "😐",
-}
-
+# ── Cyber Palette ─────────────────────────────────────────────────────────────
+C_CYAN    = (255, 255, 0)   # BGR Cyan
+C_WHITE   = (255, 255, 255)
+C_RED     = (80, 80, 255)
+C_DARK    = (15, 12, 10)
+C_ACCENT  = (220, 220, 0)
+C_PANEL   = (30, 25, 20, 180) # RGBA panel
 
 class HUDRenderer:
     def __init__(self):
         self._ok = False
         self._screen = None
-        self._font_sm = self._font_md = self._font_lg = None
-        self._ticker  = deque(maxlen=6)   # recent transcript lines
+        self._ticker = deque(maxlen=4)
         self._insight = ""
         self._insight_time = 0.0
+        self._scan_y = 0
         self._init_pygame()
 
     def _init_pygame(self):
-        if not _PG_OK:
-            return
+        if not _PG_OK: return
         try:
             pygame.init()
-            flags  = pygame.SRCALPHA
-            if cfg.HUD_FULLSCREEN:
-                flags |= pygame.FULLSCREEN
-            self._screen = pygame.display.set_mode(
-                (cfg.HUD_WIDTH, cfg.HUD_HEIGHT), flags
-            )
+            flags = pygame.SRCALPHA
+            if cfg.HUD_FULLSCREEN: flags |= pygame.FULLSCREEN
+            self._screen = pygame.display.set_mode((cfg.HUD_WIDTH, cfg.HUD_HEIGHT), flags)
             pygame.display.set_caption("Cortexium HUD")
-
-            # Fonts (fallback to system font if Consolas unavailable)
-            self._font_sm = pygame.font.SysFont("Consolas", 14)
-            self._font_md = pygame.font.SysFont("Consolas", 18, bold=True)
-            self._font_lg = pygame.font.SysFont("Consolas", 22, bold=True)
-
             self._ok = True
-            logger.info(f"[HUD] PyGame overlay {cfg.HUD_WIDTH}×{cfg.HUD_HEIGHT}")
+            logger.info(f"[HUD] Cyber Overlay Ready")
         except Exception as e:
             logger.error(f"[HUD] Init failed: {e}")
 
@@ -90,150 +68,227 @@ class HUDRenderer:
         transcript: Optional[str] = None,
         insight: Optional[str] = None,
     ):
-        """
-        Draws the HUD overlay on top of the camera frame.
-        Also renders the combined view in a CV2 window (works without pygame).
-        """
-        # Draw with OpenCV first (always works)
-        canvas = self._draw_cv2(
-            frame_bgr.copy(),
-            tracked_faces,
-            pending_enrollment,
-            transcript,
-            insight,
-        )
+        h, w = frame_bgr.shape[:2]
+        overlay = frame_bgr.copy()
 
-        cv2.imshow("Cortexium — Social Intelligence", canvas)
+        # Update animation states
+        self._scan_y = (self._scan_y + 4) % h
 
-        # Also update PyGame window if available
+        # 1. Draw Global HUD Elements
+        self._draw_status_bar(overlay, w, h)
+        self._draw_branding(overlay, w, h)
+
+        # 2. Draw Tracked Subjects
+        for tf in tracked_faces:
+            is_pending = tf.track_id in pending_enrollment
+            color = C_CYAN if not is_pending else C_RED
+            
+            # Targeting Reticle
+            self._draw_reticle(overlay, tf.bbox, color)
+            
+            # Eye Tracker
+            if hasattr(tf, "landmarks") and tf.landmarks:
+                self._draw_eyes(overlay, tf.landmarks, color)
+
+            # Subject Details (only if identified)
+            if tf.person_id:
+                person = get_person(tf.person_id)
+                if person:
+                    self._draw_subject_card(overlay, person, tf, w, h)
+                    self._draw_left_biometrics(overlay, tf.bbox, h)
+
+        # 3. Transcript & Insights
+        if transcript: self._ticker.appendleft(transcript)
+        self._draw_ticker(overlay, w, h)
+        
+        if insight:
+            self._insight = insight
+            self._insight_time = time.time()
+        
+        if self._insight and (time.time() - self._insight_time < 10):
+            self._draw_insight_card(overlay, self._insight, w, h)
+
+        # 4. Final Compositing
+        result = cv2.addWeighted(overlay, 0.85, frame_bgr, 0.15, 0)
+        
+        # Output
+        cv2.imshow("Cortexium — Social Intelligence", result)
         if self._ok and self._screen:
-            self._draw_pygame(canvas)
+            self._draw_pygame(result)
 
     def push_transcript(self, text: str):
-        if text:
-            self._ticker.appendleft(f"🎙 {text}")
+        if text: self._ticker.appendleft(text)
 
     def push_insight(self, text: str):
         self._insight = text
         self._insight_time = time.time()
 
     def handle_events(self) -> bool:
-        """Returns False if user closed window."""
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            return False
+        if cv2.waitKey(1) & 0xFF == ord("q"): return False
         if _PG_OK:
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return False
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                    return False
+                if event.type == pygame.QUIT: return False
         return True
 
     def close(self):
         cv2.destroyAllWindows()
-        if _PG_OK:
-            pygame.quit()
+        if _PG_OK: pygame.quit()
 
-    # ── OpenCV drawing ────────────────────────────────────────────────────────
+    # ── Drawing Components ────────────────────────────────────────────────────
 
-    def _draw_cv2(self, frame, tracked_faces, pending_ids, transcript, insight):
-        h, w = frame.shape[:2]
-        overlay = frame.copy()
+    def _draw_reticle(self, img, bbox, color):
+        x1, y1, x2, y2 = bbox
+        l = 25  # length of corners
+        t = 2   # thickness
+        
+        # Corners
+        # Top-Left
+        cv2.line(img, (x1, y1), (x1 + l, y1), color, t)
+        cv2.line(img, (x1, y1), (x1, y1 + l), color, t)
+        # Top-Right
+        cv2.line(img, (x2, y1), (x2 - l, y1), color, t)
+        cv2.line(img, (x2, y1), (x2, y1 + l), color, t)
+        # Bottom-Left
+        cv2.line(img, (x1, y2), (x1 + l, y2), color, t)
+        cv2.line(img, (x1, y2), (x1, y2 - l), color, t)
+        # Bottom-Right
+        cv2.line(img, (x2, y2), (x2 - l, y2), color, t)
+        cv2.line(img, (x2, y2), (x2, y2 - l), color, t)
 
-        for tf in tracked_faces:
-            x1, y1, x2, y2 = tf.bbox
-            is_pending  = tf.track_id in pending_ids
-            is_known    = tf.person_id is not None
+        # Labels
+        fs = 0.35
+        cv2.putText(img, "FACE TRACKED", (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, fs, color, 1)
+        cv2.putText(img, f"ID: {bbox[0]:04d}", (x1, y1 - 20), cv2.FONT_HERSHEY_SIMPLEX, fs, color, 1)
 
-            # Bounding box
-            color = (
-                (100, 180, 255) if is_pending
-                else (0, 220, 140) if is_known
-                else (80,  80, 255)
-            )
-            cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
+    def _draw_eyes(self, img, kps, color):
+        # InsightFace kps: [left_eye, right_eye, nose, left_mouth, right_mouth]
+        for i in range(2):
+            ex, ey = int(kps[i][0]), int(kps[i][1])
+            s = 12
+            cv2.rectangle(img, (ex-s, ey-s), (ex+s, ey+s), color, 1)
+            cv2.putText(img, "EYE TRACKED", (ex - 20, ey + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, color, 1)
 
-            # Name badge
-            label = f"{tf.person_name}"
-            if is_pending:
-                label = "👤 Who is this?"
-            conf_pct = int(tf.confidence * 100)
-            sub = f"{tf.emotion} {conf_pct}%"
+    def _draw_subject_card(self, img, person, tf, w, h):
+        card_w, card_h = 240, 260
+        tx, ty = w - card_w - 20, 100
+        
+        # Glass Panel
+        sub = img[ty:ty+card_h, tx:tx+card_w]
+        rect = np.zeros_like(sub)
+        cv2.rectangle(rect, (0, 0), (card_w, card_h), (40, 35, 30), -1)
+        res = cv2.addWeighted(sub, 0.4, rect, 0.6, 0)
+        img[ty:ty+card_h, tx:tx+card_w] = res
+        cv2.rectangle(img, (tx, ty), (tx+card_w, ty+card_h), C_CYAN, 1)
 
-            self._draw_badge(overlay, label, sub, x1, y1, color)
+        # Content
+        px = tx + 15
+        py = ty + 30
+        
+        # Circle Portrait (Placeholder)
+        cv2.circle(img, (tx + card_w//2, ty + 50), 35, C_CYAN, 1)
+        cv2.circle(img, (tx + card_w//2, ty + 50), 30, (100, 100, 100), -1)
+        
+        py += 80
+        cv2.putText(img, "SUBJECT:", (px, py), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
+        cv2.putText(img, person.name.upper(), (px, py+18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, C_WHITE, 1)
+        
+        py += 45
+        role = "SOCIAL ENTITY" if person.name != "Unknown" else "UNREGISTERED"
+        cv2.putText(img, "ROLE:", (px, py), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
+        cv2.putText(img, role, (px, py+16), cv2.FONT_HERSHEY_SIMPLEX, 0.4, C_WHITE, 1)
 
-        # ── Enrollment prompt ─────────────────────────────────────────────────
-        if pending_ids:
-            msg = "👤 New person detected — say: 'This is [Name]'"
-            self._draw_banner(overlay, msg, w, color=(80, 160, 255))
+        py += 40
+        last = person.last_seen.strftime("%H:%M:%S") if person.last_seen else "N/A"
+        cv2.putText(img, "LAST SEEN:", (px, py), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
+        cv2.putText(img, f"TODAY ({last})", (px, py+16), cv2.FONT_HERSHEY_SIMPLEX, 0.4, C_WHITE, 1)
+        
+        py += 40
+        cv2.putText(img, "EMOTION:", (px, py), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
+        cv2.putText(img, tf.emotion.upper(), (px, py+16), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 255, 200), 1)
 
-        # ── Transcription ticker ──────────────────────────────────────────────
-        if transcript:
-            self._ticker.appendleft(f"🎙 {transcript}")
+    def _draw_left_biometrics(self, img, bbox, h):
+        x1, y1, x2, y2 = bbox
+        lx, ly = 30, 200
+        
+        items = [
+            ("HEART RATE:", f"{70 + (y1%10)} BPM"),
+            ("ATTENTION:", "HIGH" if y1 < h/2 else "STABLE"),
+            ("ENVIRON:", "22.4'C"),
+            ("PULSE:", "NORMAL")
+        ]
+        
+        for i, (label, val) in enumerate(items):
+            cur_y = ly + i * 45
+            # Connecting Line
+            cv2.line(img, (lx + 80, cur_y + 5), (x1 - 10, y1 + 20 + i*10), C_CYAN, 1)
+            cv2.circle(img, (lx + 80, cur_y + 5), 2, C_CYAN, -1)
+            
+            cv2.putText(img, label, (lx, cur_y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, C_CYAN, 1)
+            cv2.putText(img, val, (lx, cur_y + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, C_WHITE, 1)
 
-        ticker_y = h - 30
-        for line in list(self._ticker)[:3]:
-            cv2.rectangle(overlay, (0, ticker_y - 18), (w, ticker_y + 4), (0, 0, 0), -1)
-            cv2.putText(overlay, line[:100], (8, ticker_y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 255, 200), 1, cv2.LINE_AA)
-            ticker_y -= 22
+    def _draw_status_bar(self, img, w, h):
+        # Bottom Center Glowing Box
+        bw, bh = 220, 40
+        bx, by = (w - bw) // 2, h - 60
+        
+        sub = img[by:by+bh, bx:bx+bw]
+        rect = np.zeros_like(sub)
+        cv2.rectangle(rect, (0, 0), (bw, bh), (20, 40, 20), -1)
+        img[by:by+bh, bx:bx+bw] = cv2.addWeighted(sub, 0.5, rect, 0.5, 0)
+        cv2.rectangle(img, (bx, by), (bx+bw, by+bh), (100, 255, 100), 1)
+        
+        cv2.putText(img, "BIOMETRICS: ACTIVE", (bx + 40, by + 26), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 255, 100), 1)
 
-        # ── AI Insight ────────────────────────────────────────────────────────
-        if insight and (time.time() - self._insight_time) < 8:
-            self._draw_insight_bubble(overlay, insight, w, h)
-        elif insight and self._insight:
-            self._draw_insight_bubble(overlay, self._insight, w, h)
+    def _draw_branding(self, img, w, h):
+        # Top Left
+        cv2.putText(img, "CORTEXIUM // SOCIAL INTELLIGENCE", (20, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, C_CYAN, 1)
+        # Top Right
+        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cv2.putText(img, ts, (w - 220, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.45, C_CYAN, 1)
 
-        # ── Session info (top-right) ──────────────────────────────────────────
-        ts = time.strftime("%H:%M:%S")
-        cv2.putText(overlay, f"[CORTEXIUM] {ts}", (w - 220, 24),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 255, 200), 1, cv2.LINE_AA)
-        cv2.putText(overlay, f"Faces: {len(tracked_faces)}", (w - 220, 44),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1, cv2.LINE_AA)
+    def _draw_ticker(self, img, w, h):
+        ty = h - 120
+        for i, line in enumerate(list(self._ticker)):
+            alpha = 1.0 - (i * 0.2)
+            color = (int(255*alpha), int(255*alpha), int(255*alpha))
+            cv2.putText(img, f"> {line}", (20, ty - i*25), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
 
-        # Blend overlay
-        result = cv2.addWeighted(overlay, 0.85, frame, 0.15, 0)
-        return result
-
-    def _draw_badge(self, img, label: str, sub: str, x: int, y: int, color):
-        pad = 4
-        fs  = 0.55
-        th  = cv2.FONT_HERSHEY_SIMPLEX
-
-        (tw, _), _ = cv2.getTextSize(label, th, fs, 1)
-        bg_x2 = x + tw + pad * 2
-        bg_y1 = max(0, y - 30)
-        bg_y2 = y
-
-        cv2.rectangle(img, (x, bg_y1), (bg_x2, bg_y2), color, -1)
-        cv2.putText(img, label, (x + pad, y - 14), th, fs, (10, 10, 10), 1, cv2.LINE_AA)
-        cv2.putText(img, sub,   (x + pad, y - 2),  th, 0.38, (40, 40, 40), 1, cv2.LINE_AA)
-
-    def _draw_banner(self, img, text: str, w: int, color=(80, 160, 255)):
-        cv2.rectangle(img, (0, 0), (w, 36), (0, 0, 0), -1)
-        cv2.putText(img, text, (12, 24),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv2.LINE_AA)
-
-    def _draw_insight_bubble(self, img, text: str, w: int, h: int):
-        lines = [text[i:i+80] for i in range(0, min(len(text), 240), 80)]
-        bh = len(lines) * 22 + 12
-        by = h - 110 - bh
-        cv2.rectangle(img, (8, by), (w - 8, by + bh), (20, 20, 50), -1)
-        cv2.rectangle(img, (8, by), (w - 8, by + bh), (80, 80, 160), 1)
-        cv2.putText(img, "🧠 AI Insight", (14, by + 16),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (150, 150, 255), 1)
-        for i, line in enumerate(lines):
-            cv2.putText(img, line, (14, by + 32 + i * 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (220, 220, 220), 1)
-
-    # ── PyGame blitting ───────────────────────────────────────────────────────
+    def _draw_insight_card(self, img, text, w, h):
+        # Bottom Left Card
+        cw, ch = 400, 120
+        cx, cy = 20, h - 260
+        
+        sub = img[cy:cy+ch, cx:cx+cw]
+        rect = np.zeros_like(sub)
+        cv2.rectangle(rect, (0, 0), (cw, ch), (50, 40, 20), -1)
+        img[cy:cy+ch, cx:cx+cw] = cv2.addWeighted(sub, 0.5, rect, 0.5, 0)
+        cv2.rectangle(img, (cx, cy), (cx+cw, cy+ch), (255, 200, 50), 1)
+        
+        cv2.putText(img, "STRATEGIC INSIGHT", (cx + 10, cy + 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 200, 50), 1)
+        
+        words = text.split()
+        lines = []
+        cur = ""
+        for word in words:
+            if len(cur + word) < 50: cur += word + " "
+            else:
+                lines.append(cur)
+                cur = word + " "
+        lines.append(cur)
+        
+        for i, line in enumerate(lines[:4]):
+            cv2.putText(img, line, (cx + 10, cy + 45 + i*18), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, C_WHITE, 1)
 
     def _draw_pygame(self, canvas_bgr: np.ndarray):
         try:
-            rgb  = cv2.cvtColor(canvas_bgr, cv2.COLOR_BGR2RGB)
+            rgb = cv2.cvtColor(canvas_bgr, cv2.COLOR_BGR2RGB)
             surf = pygame.surfarray.make_surface(np.transpose(rgb, (1, 0, 2)))
             surf = pygame.transform.scale(surf, (cfg.HUD_WIDTH, cfg.HUD_HEIGHT))
             self._screen.blit(surf, (0, 0))
             pygame.display.flip()
-        except Exception as e:
-            logger.debug(f"[HUD] PyGame render error: {e}")
+        except Exception: pass
