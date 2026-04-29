@@ -14,6 +14,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -30,6 +31,12 @@ from core.vision.body_pose import BodyPosePipeline
 from core.vision.emotion_detector import EmotionDetector
 from core.audio.speech_engine import SpeechEngine
 from core.audio.diarization import DiarizationEngine
+from core.audio.voiceprint import VoiceprintStore
+from core.audio.conversation_tracker import (
+    ConversationTracker,
+    ConversationSummarizer,
+    save_conversation_to_db,
+)
 from core.fusion.interaction_analyzer import InteractionAnalyzer
 from core.enrollment.enrollment_flow import EnrollmentFlow
 from core.hud.hud_renderer import HUDRenderer
@@ -205,6 +212,12 @@ def main():
     analyzer       = InteractionAnalyzer(interval_seconds=10.0)
     enrollment     = EnrollmentFlow()
     hud            = HUDRenderer()
+    voiceprint     = VoiceprintStore()
+    conv_tracker   = ConversationTracker()
+    conv_summarizer = ConversationSummarizer()
+
+    # ── HOST / user voiceprint: enroll at startup if mic available ────────────
+    _host_enrolled = False
 
     if speech_engine and not args.no_audio:
         speech_engine.start_mic_stream()
@@ -245,14 +258,25 @@ def main():
             tracked_faces, pose_result = vision_worker.get_latest()
 
             # ── Audio ─────────────────────────────────────────────────────────
-            transcript = None
-            if not args.no_audio:
-                transcript = speech_engine.get_latest_transcript()
+            transcript  = None
+            audio_chunk = None
+            if not args.no_audio and speech_engine:
+                transcript  = speech_engine.get_latest_transcript()
+                audio_chunk = speech_engine.get_latest_audio_chunk()
+
+            # ── Voiceprint speaker identification ─────────────────────────────
+            resolved_speaker_name: Optional[str] = None
+            resolved_speaker_id:   Optional[str] = None
+            if audio_chunk is not None and voiceprint.enrolled_count > 0:
+                pid, pname, conf = voiceprint.identify(audio_chunk)
+                if pid and pname:
+                    resolved_speaker_name = pname
+                    resolved_speaker_id   = pid
 
             # ── Enrollment (Main Thread for state) ────────────────────────────
             for tf in tracked_faces:
                 if tf.person_id is None and tf.embedding:
-                    enrollment.trigger(tf.track_id, tf.embedding)
+                    enrollment.trigger(tf.track_id, tf.embedding, audio_chunk=audio_chunk)
 
             pending_ids = enrollment.get_pending_ids()
 
@@ -275,6 +299,12 @@ def main():
             analyzer.feed_faces(face_dicts)
             if transcript:
                 analyzer.feed_speech(transcript)
+                # ── Add turn to conversation tracker ─────────────────────────
+                speaker_label = resolved_speaker_name or "Unknown"
+                conv_tracker.add_turn(speaker_label, transcript)
+
+            if resolved_speaker_name:
+                analyzer.feed_speaker(resolved_speaker_name)
             
             if pose_result:
                 analyzer.feed_gesture(pose_result.gesture)
@@ -283,6 +313,25 @@ def main():
             event = analyzer.tick()
             if event and event.get("ai_insight"):
                 hud.push_insight(event["ai_insight"])
+
+            # ── Conversation summarization ────────────────────────────────────
+            if conv_tracker.should_summarize():
+                transcript_text = conv_tracker.get_transcript_text()
+                participants    = conv_tracker.get_participants()
+                conv_tracker.flush()
+
+                def _on_summary(summary: str, _tx=transcript_text, _p=participants):
+                    hud.push_insight(f"💬 Summary: {summary}")
+                    pa = _p[0] if len(_p) > 0 else None
+                    pb = _p[1] if len(_p) > 1 else None
+                    save_conversation_to_db(pa, pb, _tx, summary)
+                    logger.info(f"[Main] Conversation summary: {summary}")
+
+                conv_summarizer.summarize(
+                    transcript_text,
+                    participants,
+                    on_done=_on_summary,
+                )
 
             # ── HUD ───────────────────────────────────────────────────────────
             hud.render(

@@ -24,6 +24,21 @@ from core.storage.person_registry import enroll_person, update_person_name
 from core.storage.graph_db import ensure_person, record_meeting
 
 
+# Lazy import to avoid circular dependency
+_voiceprint_store = None
+
+def _get_voiceprint_store():
+    global _voiceprint_store
+    if _voiceprint_store is None:
+        try:
+            from core.audio.voiceprint import VoiceprintStore
+            _voiceprint_store = VoiceprintStore()
+        except Exception as e:
+            from loguru import logger
+            logger.warning(f"[Enroll] VoiceprintStore unavailable: {e}")
+    return _voiceprint_store
+
+
 # ── Name extraction patterns ──────────────────────────────────────────────────
 
 _PATTERNS = [
@@ -52,7 +67,7 @@ async def extract_name_via_llm(text: str) -> Optional[str]:
     try:
         import ollama
         response = ollama.chat(
-            model="llama3.1:8b",
+            model="llama3.2:3b",
             messages=[{
                 "role": "user",
                 "content": (
@@ -87,13 +102,18 @@ class EnrollmentFlow:
         self._pending: dict[int, dict] = {}   # track_id → {embedding, triggered_at}
         self._timeout = 15.0   # seconds to wait for voice response
 
-    def trigger(self, track_id: int, embedding: list[float]):
-        """Mark a track as waiting for voice enrollment."""
+    def trigger(self, track_id: int, embedding: list[float], audio_chunk=None):
+        """Mark a track as waiting for voice enrollment.
+        
+        audio_chunk: optional np.ndarray — raw audio captured at trigger time,
+                     stored for voiceprint enrollment once name is resolved.
+        """
         if track_id not in self._pending:
             logger.info(f"[Enroll] Waiting for voice to identify track #{track_id}")
             self._pending[track_id] = {
-                "embedding": embedding,
+                "embedding":    embedding,
                 "triggered_at": time.time(),
+                "audio_chunk":  audio_chunk,   # may be None — that's fine
             }
 
     def feed_transcript(self, text: str, track_id: Optional[int] = None):
@@ -120,6 +140,19 @@ class EnrollmentFlow:
         person = enroll_person(embedding=embedding, name=name)
         ensure_person(person.id, name)
         logger.success(f"[Enroll] ✓ Enrolled '{name}' for track #{track_id}")
+
+        # ── Voiceprint enrollment ─────────────────────────────────────────────
+        audio_chunk = pending.get("audio_chunk")
+        if audio_chunk is not None:
+            vp = _get_voiceprint_store()
+            if vp:
+                import threading
+                threading.Thread(
+                    target=vp.enroll,
+                    args=(person.id, name, audio_chunk),
+                    daemon=True,
+                ).start()
+
         return person
 
     def is_pending(self, track_id: int) -> bool:

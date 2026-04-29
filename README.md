@@ -107,7 +107,7 @@ cp .env.example .env
 # Edit .env: set HF_TOKEN, CAMERA_SOURCE, etc.
 
 # Pull LLaMA model
-ollama pull llama3.1:8b
+ollama pull llama3.2:3b
 ```
 
 ### 3. Run

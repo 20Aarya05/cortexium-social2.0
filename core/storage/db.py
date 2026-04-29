@@ -61,6 +61,18 @@ class InteractionEvent(Base):
     raw_json      = Column(Text, nullable=True)
 
 
+class Conversation(Base):
+    """Full conversation transcript + LLM summary between two people."""
+    __tablename__    = "conversations"
+    id               = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    started_at       = Column(DateTime, default=datetime.utcnow)
+    ended_at         = Column(DateTime, nullable=True)
+    person_a         = Column(String(120), nullable=True)   # name or person_id
+    person_b         = Column(String(120), nullable=True)
+    full_transcript  = Column(Text, nullable=True)
+    summary          = Column(Text, nullable=True)
+
+
 ENGINE = create_engine(
     f"sqlite:///{cfg.SQLITE_DB}",
     connect_args={"check_same_thread": False},
@@ -115,3 +127,31 @@ def search_face(embedding: list[float], top_k: int = 1):
     ids       = results["ids"][0]
     distances = results["distances"][0]
     return list(zip(ids, distances))
+
+
+def save_conversation(
+    person_a: Optional[str],
+    person_b: Optional[str],
+    transcript: str,
+    summary: str,
+    started_at=None,
+    ended_at=None,
+) -> str:
+    """Persist a conversation + LLM summary to SQLite. Returns conversation id."""
+    import uuid as _uuid
+    from datetime import datetime as _dt
+    conv_id = str(_uuid.uuid4())
+    with SessionLocal() as session:
+        conv = Conversation(
+            id              = conv_id,
+            person_a        = person_a,
+            person_b        = person_b,
+            full_transcript = transcript,
+            summary         = summary,
+            started_at      = started_at or _dt.utcnow(),
+            ended_at        = ended_at   or _dt.utcnow(),
+        )
+        session.add(conv)
+        session.commit()
+    logger.info(f"[DB] Conversation saved: {conv_id}")
+    return conv_id

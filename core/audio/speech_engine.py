@@ -48,6 +48,7 @@ class SpeechEngine:
         self._transcript_queue: queue.Queue[str] = queue.Queue()
         self._audio_queue: queue.Queue[np.ndarray] = queue.Queue()
         self._running = False
+        self._latest_audio_chunk: Optional[np.ndarray] = None   # raw audio for voiceprint
 
         if _WHISPER_OK:
             logger.info(f"[Speech] Loading Whisper '{model_size}' model …")
@@ -122,6 +123,10 @@ class SpeechEngine:
         except queue.Empty:
             return None
 
+    def get_latest_audio_chunk(self) -> Optional[np.ndarray]:
+        """Non-blocking. Returns the most recent raw audio buffer (float32, 16kHz) or None."""
+        return self._latest_audio_chunk
+
     def _mic_loop(self):
         if not _SD_OK:
             logger.warning("[Speech] sounddevice unavailable — mic loop disabled")
@@ -151,8 +156,11 @@ class SpeechEngine:
                 while self._running:
                     # Capture a snapshot every (CHUNK_SECONDS - OVERLAP)
                     time.sleep(CHUNK_SECONDS - OVERLAP_SECS)
+                    chunk = buffer.copy()
                     # Put current buffer in queue for worker
-                    self._audio_queue.put(buffer.copy())
+                    self._audio_queue.put(chunk)
+                    # Also expose latest chunk for voiceprint identification
+                    self._latest_audio_chunk = chunk
                     
         except Exception as e:
             logger.error(f"[Speech] Mic loop crashed: {e}")

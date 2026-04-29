@@ -135,7 +135,7 @@ cortexium-social/
   ```
 - **Local LLM (Ollama + LLaMA 3.1 8B)**: Summarizes and tags social context
   - Install: https://ollama.com/download
-  - Model: `ollama pull llama3.1:8b`
+  - Model: `ollama pull llama3.2:3b`
 
 ---
 

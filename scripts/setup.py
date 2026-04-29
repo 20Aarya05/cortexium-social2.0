@@ -35,8 +35,8 @@ def check_ollama():
         if "llama3" in result.stdout:
             print("✓ Ollama + LLaMA 3.1 available")
         else:
-            print("⚠ Ollama running but llama3.1:8b not found")
-            print("  Run: ollama pull llama3.1:8b")
+            print("⚠ Ollama running but llama3.2:3b not found")
+            print("  Run: ollama pull llama3.2:3b")
     except FileNotFoundError:
         print("⚠ Ollama not found — install from https://ollama.com/download")
     except Exception as e:
